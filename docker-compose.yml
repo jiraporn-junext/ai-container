@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  claude-cli:
+    build: .
+    container_name: ai_container
+    platform: linux/arm64 # Forces Apple Silicon optimization (M1/M2/M3)
+    ports:
+      - "11434:11434"     # Exposes Ollama's local port to your host MacBook
+    volumes:
+      # Explicitly mount your project workspace folder
+      - /Users/jirapornjohansson/workspace:/home/workspace
+      
+      # Persist Claude settings and tokens (Managed internally by Docker)
+      - claude-config:/root/.claude
+      
+      # Persist NVM-installed Node versions (Managed internally by Docker)
+      - nvm-data:/root/.nvm
+      
+      # Persist downloaded Ollama models (Managed internally by Docker)
+      - ollama-models:/root/.ollama
+      
+      # Sync your Mac git configurations
+      - ~/.gitconfig:/root/.gitconfig:ro
+    
+    # Required parameters for interactive command typing
+    stdin_open: true
+    tty: true
+
+volumes:
+  claude-config:
+  nvm-data:
+  ollama-models:
+
