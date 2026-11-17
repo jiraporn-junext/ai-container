@@ -253,7 +253,10 @@ wait_for_model() {
 }
 
 print_banner() {
-    local mode="$1" model="$2"
+    local mode="$1" model="$2" suffix=""
+    if [ "$PROJECT" != "$DEFAULT_PROJECT" ]; then
+        suffix=" $PROJECT"
+    fi
     cat <<EOF
 
   mode     $mode
@@ -263,9 +266,10 @@ print_banner() {
   project  $PROJECT
   host     http://localhost:${OLLAMA_HOST_PORT:-$DEFAULT_PORT}
 
-  chat     ./container.sh chat
-  code     ./container.sh shell   (then: aider --model ollama_chat/$model)
-  logs     ./container.sh logs
+  chat     ./container.sh chat${suffix}
+  code     ./container.sh shell${suffix}   (then: aider --model ollama_chat/$model)
+  logs     ./container.sh logs${suffix}
+  stop     ./container.sh stop${suffix}
 
 EOF
 }
