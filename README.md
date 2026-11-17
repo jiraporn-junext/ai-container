@@ -140,16 +140,38 @@ docker compose down -v                             # also deletes the models and
 ## Building the image
 
 ```bash
-./container.sh start          # builds if the image is missing or the version changed, then starts
-docker compose build          # build without starting
-docker compose build --no-cache   # build from scratch, ignoring the layer cache
-make rebuild                  # build from scratch and start
+./container.sh build              # build and tag with the version from the VERSION file
+./container.sh build 2.5.0        # build and tag with a specific version
+./container.sh start              # builds if needed, then starts
+make rebuild                      # build from scratch and start
+```
+
+Each build produces two tags — the version and `latest`:
+
+```
+ai-container:2.6.0     the release it was built from
+ai-container:latest    the newest build
+```
+
+`latest` is what runs by default. To run a specific release instead:
+
+```bash
+./container.sh start --image 2.5.0
+```
+
+or pin it in `.env`:
+
+```
+IMAGE_TAG=2.5.0
 ```
 
 `container.sh` keeps track of the version the image was built at in `.container-version`, so a plain
 `start` rebuilds automatically after you bump `VERSION`, and skips the build when nothing changed.
-Every build path produces the same image, because the version is read from the `VERSION` file rather
-than passed in.
+The version is read from the `VERSION` file, so every build path produces the same image.
+
+```bash
+docker images ai-container        # see the tags
+```
 
 ## Running more than one instance
 

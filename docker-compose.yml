@@ -3,7 +3,9 @@ name: ai-container
 services:
   claude-cli:
     build: .
-    image: ai-container:local
+    # Built as ai-container:<version> and ai-container:latest. Pin a specific
+    # version with IMAGE_TAG if you want to run a specific release.
+    image: "ai-container:${IMAGE_TAG:-latest}"
     # Change these (with COMPOSE_PROJECT_NAME and OLLAMA_HOST_PORT) to run a
     # second instance alongside the first instead of replacing it.
     container_name: "${CONTAINER_NAME:-ai_container}"

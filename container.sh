@@ -35,6 +35,7 @@ usage() {
 Usage: ./container.sh <command> [mode|instance] [instance] [options]
 
 Commands:
+  build [version]       Build the image and tag it with its version
   start [local|cloud]   Build if needed, start the container, wait for the model
   stop                  Stop and remove the container (volumes are kept)
   restart [local|cloud] Restart, optionally switching between local and cloud
@@ -62,6 +63,7 @@ Options:
   --name NAME       Container name. Default: ai_container
   --project NAME    Compose project, which owns the volumes. Default: ai-container
   --port PORT       Host port for the Ollama API. Default: 11435
+  --image TAG       Image tag to run. Default: latest
 
 Give either the name or the project and the other follows from it, so
 "--project ai2" is named ai2, and "--name work" runs in the project "work".
@@ -79,6 +81,7 @@ positional=()
 name_override=""
 project_override=""
 port_override=""
+image_override=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -88,6 +91,8 @@ while [ $# -gt 0 ]; do
         --project=*) project_override="${1#*=}"; shift ;;
         --port) port_override="${2:-}"; shift 2 || true ;;
         --port=*) port_override="${1#*=}"; shift ;;
+        --image) image_override="${2:-}"; shift 2 || true ;;
+        --image=*) image_override="${1#*=}"; shift ;;
         --) shift; positional+=("$@"); break ;;
         *) positional+=("$1"); shift ;;
     esac
@@ -95,15 +100,19 @@ done
 
 command_name="${positional[0]:-help}"
 
-# The second argument is the mode, or the name of an instance to run.
-# "start ai2" runs the instance ai2, "start cloud ai2" runs it in cloud mode.
-first="${positional[1]:-}"
-second="${positional[2]:-}"
+# "build" takes a version, every other command takes a mode or an instance
+version_arg=""
 mode_arg=""
 instance_arg=""
-if [ -n "$first" ] && [ "$first" != "local" ] && [ "$first" != "cloud" ]; then
+first="${positional[1]:-}"
+second="${positional[2]:-}"
+if [ "$command_name" = "build" ]; then
+    version_arg="$first"
+elif [ -n "$first" ] && [ "$first" != "local" ] && [ "$first" != "cloud" ]; then
+    # "start ai2" runs the instance ai2
     instance_arg="$first"
 elif [ -n "$second" ]; then
+    # "start cloud ai2" runs it in cloud mode
     mode_arg="$first"
     instance_arg="$second"
 else
@@ -315,6 +324,11 @@ elif [ -n "$instance_arg" ] && [ -z "${OLLAMA_HOST_PORT:-}" ]; then
     export OLLAMA_HOST_PORT="$(free_port 11436)"
 fi
 
+# Which image to run. Builds are tagged with their version and also as latest,
+# so latest is the newest build unless a version is pinned.
+IMAGE_TAG="${image_override:-${IMAGE_TAG:-latest}}"
+export IMAGE_TAG
+
 export CONTAINER_NAME
 
 # Per-project files, so two instances do not overwrite each other's settings
@@ -323,6 +337,19 @@ BUILT_FILE=".container-version"
 MODEL_ENV_FILE=".env.${PROJECT}"
 
 # ----------------------------------------------------------------- commands
+
+# Build the image and tag it with its version, plus latest so that the newest
+# build is what runs by default.
+do_build() {
+    local version="${1:-$(current_version)}"
+    local tag="ai-container:${version}"
+
+    info "building $tag"
+    IMAGE_TAG="$version" compose build
+    docker tag "$tag" "ai-container:latest"
+    echo "$version" > "$BUILT_FILE"
+    info "tagged $tag and ai-container:latest"
+}
 
 do_start() {
     local mode="${1:-$(active_mode)}"
@@ -341,9 +368,7 @@ do_start() {
     want="$(current_version)"
     have="$(built_version)"
     if [ "$want" != "$have" ]; then
-        info "building the image (version $want, first build takes a few minutes)"
-        compose build
-        echo "$want" > "$BUILT_FILE"
+        do_build "$want"
     else
         info "image is up to date (version $want)"
     fi
@@ -376,6 +401,9 @@ do_status() {
 }
 
 case "$command_name" in
+    build)
+        do_build "$version_arg"
+        ;;
     start)
         do_start "$mode_arg"
         ;;
