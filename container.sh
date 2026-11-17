@@ -142,6 +142,34 @@ print_banner() {
 EOF
 }
 
+# A container created outside this project but using the same name would stop
+# "compose up" with a confusing error, so say what to do about it.
+check_name_conflict() {
+    local name project existing
+    name="$(sed -n 's/^[[:space:]]*container_name:[[:space:]]*//p' docker-compose.yml | head -1)"
+    [ -n "$name" ] || return 0
+
+    existing="$(docker ps -a --filter "name=^/${name}$" --format '{{.ID}}' 2>/dev/null | head -1)"
+    [ -n "$existing" ] || return 0
+
+    # Containers made by this project carry its label and are replaced normally
+    project="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$existing" 2>/dev/null || echo "")"
+    if [ "$project" = "$(project_name)" ]; then
+        return 0
+    fi
+
+    warn "a container named '$name' already exists and was not created by this project"
+    warn "it has to go before the new one can start:"
+    warn ""
+    warn "    docker rm -f $name"
+    warn ""
+    exit 1
+}
+
+project_name() {
+    basename "$PWD" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
+}
+
 do_start() {
     local mode="${1:-$(active_mode)}"
     local model
@@ -164,6 +192,8 @@ do_start() {
     else
         info "image is up to date (version $want)"
     fi
+
+    check_name_conflict
 
     info "starting the container in $mode mode"
     $COMPOSE up -d --remove-orphans
