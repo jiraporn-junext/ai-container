@@ -1,34 +1,61 @@
-version: '3.8'
-
 services:
   claude-cli:
     build: .
+    image: ai-container:local
     container_name: ai_container
-    platform: linux/arm64 # Forces Apple Silicon optimization (M1/M2/M3)
     ports:
-      - "11434:11434"     # Exposes Ollama's local port to your host MacBook
+      # The container always listens on 11434; the host side is mapped to 11435 so
+      # it does not collide with an Ollama you already run natively on your Mac.
+      - "${OLLAMA_HOST_PORT:-11435}:11434"
+    environment:
+      # Model that gets pulled on first start and that Claude Code talks to
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
+
+      # Ollama's default context window is only 4096 tokens, which is too small
+      # for a coding agent's system prompt plus the code it is working on.
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-16384}"
+
+      # Route Claude Code to the local Ollama instead of the Anthropic API.
+      # Ollama speaks the Anthropic Messages API, including streaming and tool use.
+      ANTHROPIC_BASE_URL: http://127.0.0.1:11434
+      ANTHROPIC_AUTH_TOKEN: ollama
+      ANTHROPIC_API_KEY: ollama
+      ANTHROPIC_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
+
+      # Without this, Claude Code asks for the 1M-context variant and sends the
+      # model name as "qwen3:1.7b[1m]", which Ollama rejects with a 400.
+      CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
     volumes:
       # Explicitly mount your project workspace folder
-      - /Users/jirapornjohansson/workspace:/home/workspace
-      
+      - "${WORKSPACE_PATH:-/Users/jirapornjohansson/workspace}:/home/workspace"
+
       # Persist Claude settings and tokens (Managed internally by Docker)
       - claude-config:/root/.claude
-      
+
       # Persist NVM-installed Node versions (Managed internally by Docker)
       - nvm-data:/root/.nvm
-      
+
       # Persist downloaded Ollama models (Managed internally by Docker)
       - ollama-models:/root/.ollama
-      
+
       # Sync your Mac git configurations
       - ~/.gitconfig:/root/.gitconfig:ro
-    
+
     # Required parameters for interactive command typing
     stdin_open: true
     tty: true
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:11434/api/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   claude-config:
   nvm-data:
   ollama-models:
-

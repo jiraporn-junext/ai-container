@@ -1,0 +1,4 @@
+.env
+.container-mode
+.claude/
+.DS_Store
