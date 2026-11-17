@@ -40,6 +40,17 @@ the same way with either one.
 ./container.sh start            # reuse whichever mode you used last
 ```
 
+Cloud models need an Ollama account. Sign in once:
+
+```bash
+./container.sh signin          # opens a browser, or prints a code to paste
+```
+
+Signing in runs as a **one-shot container**: it starts Ollama, signs in, and stops again. The
+credentials are written to the `ollama-models` volume, so the main container can be stopped and
+started whenever you like — and signing in works even when it is already stopped. Use
+`./container.sh signout` to remove the credentials again.
+
 The mode is remembered in `.container-mode`, and the model is written into `.env` so plain
 `docker compose` commands keep working too. Override the models with `LOCAL_MODEL` and
 `CLOUD_MODEL`:
@@ -338,6 +349,7 @@ Dockerfile                   image: Ollama + Claude Code + Node 24
 docker-compose.yml           service wiring, volumes, Claude Code -> Ollama
 container.sh                 start/stop the container, switch between local and cloud models
 scripts/ollama-bootstrap.sh  pulls the model on first start
+scripts/ollama-signin        one-shot sign-in that leaves nothing running
 scripts/ai-container         reports the version and endpoints inside the container
 scripts/git-guard.sh         git wrapper that blocks pushing to a remote
 Makefile                     convenience wrappers around docker compose

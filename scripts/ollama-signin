@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# One-shot Ollama sign-in.
+#
+# "ollama signin" talks to a running server, so this starts one for the length
+# of the sign-in and stops it again afterwards. Run it through "docker compose
+# run --rm" so nothing is left running on the host once it finishes.
+set -uo pipefail
+
+PORT="${OLLAMA_HOST##*:}"
+PORT="${PORT:-11434}"
+API="http://127.0.0.1:${PORT}"
+LOG="/tmp/ollama-signin.log"
+
+ollama serve >"$LOG" 2>&1 &
+server_pid=$!
+
+cleanup() {
+    kill "$server_pid" 2>/dev/null
+    wait "$server_pid" 2>/dev/null
+}
+trap cleanup EXIT INT TERM
+
+for ((i = 0; i < 60; i++)); do
+    curl -sf "${API}/api/version" >/dev/null 2>&1 && break
+    sleep 1
+done
+
+if ! curl -sf "${API}/api/version" >/dev/null 2>&1; then
+    echo "the ollama server did not start, see ${LOG}" >&2
+    cat "$LOG" >&2
+    exit 1
+fi
+
+subcommand="${1:-signin}"
+
+ollama "$subcommand"
+status=$?
+
+if [ $status -eq 0 ]; then
+    echo
+    if [ "$subcommand" = "signout" ]; then
+        echo "signed out. The credentials are gone from the ollama-models volume."
+    else
+        echo "signed in. The credentials live in the ollama-models volume, so the"
+        echo "container can be stopped and started as often as you like."
+    fi
+fi
+
+exit $status

@@ -38,6 +38,7 @@ Commands:
   models                List the models stored in the container
   chat                  Chat with the active model
   signin                Sign in to Ollama (needed for some cloud models)
+  signout               Sign out of Ollama
   version               Print the version of this repo
   help                  Show this help
 
@@ -216,7 +217,13 @@ case "${1:-help}" in
         ;;
     signin)
         info "signing in to Ollama - a browser window opens, or paste a code"
-        $COMPOSE exec "$SERVICE" ollama signin
+        # A one-shot container: it starts Ollama, signs in, and stops again, so
+        # nothing is left running. The container itself does not need to be up.
+        $COMPOSE run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signin
+        ;;
+    signout)
+        info "signing out of Ollama"
+        $COMPOSE run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signout
         ;;
     version)
         echo "$(current_version)"

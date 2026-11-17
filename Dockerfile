@@ -51,6 +51,11 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \
 COPY scripts/ollama-bootstrap.sh /usr/local/bin/ollama-bootstrap
 RUN chmod +x /usr/local/bin/ollama-bootstrap
 
+# One-shot sign-in: starts Ollama, signs in, and stops again, so signing in
+# never leaves anything running in the background
+COPY scripts/ollama-signin /usr/local/bin/ollama-signin
+RUN chmod +x /usr/local/bin/ollama-signin
+
 # Git wrapper that blocks pushing to a remote while leaving everything else
 # working, so the container can commit but cannot publish anything. The real
 # binary is moved off PATH so the wrapper is the only way to reach git.
