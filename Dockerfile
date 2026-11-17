@@ -51,6 +51,11 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \
 COPY scripts/ollama-bootstrap.sh /usr/local/bin/ollama-bootstrap
 RUN chmod +x /usr/local/bin/ollama-bootstrap
 
+# The host's ~/.gitconfig is not mounted, so give the container its own git
+# setup: trust the mounted workspace, and keep the squash alias.
+RUN git config --global --add safe.directory '*' \
+    && git config --global alias.squash '!f() { git reset --soft HEAD~$1 && git commit --amend --no-edit; }; f'
+
 # One-shot sign-in: starts Ollama, signs in, and stops again, so signing in
 # never leaves anything running in the background
 COPY scripts/ollama-signin /usr/local/bin/ollama-signin

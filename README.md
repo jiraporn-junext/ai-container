@@ -83,9 +83,9 @@ model support.
 
 ## Git inside the container
 
-The container has your real repository mounted, and it is allowed to work on it — commit, branch,
-merge, pull and diff all work normally. **Pushing to a remote is blocked**, so the container can
-never publish anything on its own:
+Git is installed in the image, and the container has your real repository mounted, so it is allowed
+to work on it — commit, branch, merge, pull and diff all work normally. **Pushing to a remote is
+blocked**, so the container can never publish anything on its own:
 
 ```
 $ git push
@@ -98,13 +98,21 @@ This is enforced by a `git` wrapper on `PATH`; the real binary is moved out of `
 reached by absolute path either. To push for real, run `git push` on your Mac, or set
 `GIT_ALLOW_PUSH=1` for a single command inside the container.
 
+Your host's `~/.gitconfig` is **not** mounted in. The container gets its own git setup — the
+`squash` alias you have, `safe.directory` so mounted repositories are trusted, and the identity from
+`GIT_USER_NAME` / `GIT_USER_EMAIL` in `.env`:
+
+```
+GIT_USER_NAME=Jiraporn Johansson
+GIT_USER_EMAIL=jiraporn.junext@gmail.com
+```
+
 ## What lands on your host
 
 | Where | What | Notes |
 | --- | --- | --- |
-| `${WORKSPACE_PATH}` → `/home/workspace` | your project folder | The only real bind mount. Anything the container writes there — files Claude Code edits, build output, git operations — is written straight to your Mac. |
-| `~/.gitconfig` → `/root/.gitconfig` | your git identity | Read-only (`ro`), so nothing is written back. |
-| `ai-container_ollama-models` | model weights | ~1.4 GB for the local model, nothing for a cloud model. |
+| `${WORKSPACE_PATH}` → `/home/workspace` | your project folder | The only bind mount. Anything the container writes there — files Claude Code edits, build output, git operations — is written straight to your Mac. |
+| `ai-container_ollama-models` | model weights, and your Ollama identity after `signin` | ~1.4 GB for the local model, nothing for a cloud model. |
 | `ai-container_claude-config` | Claude Code settings, tokens, history | |
 | `ai-container_nvm-data` | installed Node versions | |
 | `ai-container:local` | the image itself | ~1.5 GB plus Docker's build cache. |
@@ -276,6 +284,8 @@ Rough requirements for the popular sizes:
 | --- | --- | --- |
 | `OLLAMA_MODEL` | `qwen3:1.7b` | Model pulled on first start and used by Claude Code |
 | `OLLAMA_HOST_PORT` | `11435` | Host port mapped to Ollama's `11434` in the container |
+| `OLLAMA_CONTEXT_LENGTH` | `16384` | Context window for the model |
+| `GIT_USER_NAME` / `GIT_USER_EMAIL` | `ai-container` | Identity used for commits inside the container |
 | `WORKSPACE_PATH` | `/Users/jirapornjohansson/workspace` | Host folder mounted at `/home/workspace` |
 
 ## Using the Anthropic API instead
