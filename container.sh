@@ -159,7 +159,7 @@ do_start() {
     have="$(built_version)"
     if [ "$want" != "$have" ]; then
         info "building the image (version $want, first build takes a few minutes)"
-        $COMPOSE build --build-arg "VERSION=$want"
+        $COMPOSE build
         echo "$want" > "$BUILT_FILE"
     else
         info "image is up to date (version $want)"

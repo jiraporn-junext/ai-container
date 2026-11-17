@@ -70,9 +70,9 @@ RUN mkdir -p /usr/local/libexec \
     && chmod +x /usr/local/bin/git \
     && /usr/local/bin/git --version
 
-# Version of the image, reported by "ai-container --version" inside the container
-ARG VERSION=dev
-ENV AI_CONTAINER_VERSION=${VERSION}
+# Version of the image, reported by "ai-container --version" inside the container.
+# The VERSION file is the only source of truth, so any build command gives the
+# same result.
 COPY VERSION /etc/ai-container/VERSION
 COPY scripts/ai-container /usr/local/bin/ai-container
 RUN chmod +x /usr/local/bin/ai-container

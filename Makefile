@@ -21,7 +21,7 @@ down: ## Stop the container
 	./container.sh stop
 
 rebuild: ## Rebuild the image from scratch and restart
-	$(COMPOSE) build --no-cache --build-arg VERSION=$(VERSION)
+	$(COMPOSE) build --no-cache
 	./container.sh start
 
 version: ## Print the version

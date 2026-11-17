@@ -137,6 +137,20 @@ To remove everything the container created:
 docker compose down -v                             # also deletes the models and Claude config
 ```
 
+## Building the image
+
+```bash
+./container.sh start          # builds if the image is missing or the version changed, then starts
+docker compose build          # build without starting
+docker compose build --no-cache   # build from scratch, ignoring the layer cache
+make rebuild                  # build from scratch and start
+```
+
+`container.sh` keeps track of the version the image was built at in `.container-version`, so a plain
+`start` rebuilds automatically after you bump `VERSION`, and skips the build when nothing changed.
+Every build path produces the same image, because the version is read from the `VERSION` file rather
+than passed in.
+
 ## Everyday commands
 
 | Command | What it does |
