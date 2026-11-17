@@ -70,6 +70,23 @@ The next `./container.sh start` notices the version changed and rebuilds the ima
 are tagged in semver form — `1.0.0` is the original container, `2.0.0` added the local and cloud
 model support.
 
+## Git inside the container
+
+The container has your real repository mounted, and it is allowed to work on it — commit, branch,
+merge, pull and diff all work normally. **Pushing to a remote is blocked**, so the container can
+never publish anything on its own:
+
+```
+$ git push
+git push is disabled inside the ai-container.
+The repository is your own on the host - run it there instead.
+Set GIT_ALLOW_PUSH=1 to override this for a single command.
+```
+
+This is enforced by a `git` wrapper on `PATH`; the real binary is moved out of `PATH` so it cannot be
+reached by absolute path either. To push for real, run `git push` on your Mac, or set
+`GIT_ALLOW_PUSH=1` for a single command inside the container.
+
 ## What lands on your host
 
 | Where | What | Notes |
@@ -322,6 +339,7 @@ docker-compose.yml           service wiring, volumes, Claude Code -> Ollama
 container.sh                 start/stop the container, switch between local and cloud models
 scripts/ollama-bootstrap.sh  pulls the model on first start
 scripts/ai-container         reports the version and endpoints inside the container
+scripts/git-guard.sh         git wrapper that blocks pushing to a remote
 Makefile                     convenience wrappers around docker compose
 VERSION                      the current version, in semver form
 .env.example                 configuration template

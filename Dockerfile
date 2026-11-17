@@ -51,6 +51,15 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \
 COPY scripts/ollama-bootstrap.sh /usr/local/bin/ollama-bootstrap
 RUN chmod +x /usr/local/bin/ollama-bootstrap
 
+# Git wrapper that blocks pushing to a remote while leaving everything else
+# working, so the container can commit but cannot publish anything. The real
+# binary is moved off PATH so the wrapper is the only way to reach git.
+COPY scripts/git-guard.sh /usr/local/bin/git
+RUN mkdir -p /usr/local/libexec \
+    && mv /usr/bin/git /usr/local/libexec/git \
+    && chmod +x /usr/local/bin/git \
+    && /usr/local/bin/git --version
+
 # Version of the image, reported by "ai-container --version" inside the container
 ARG VERSION=dev
 ENV AI_CONTAINER_VERSION=${VERSION}
