@@ -1,5 +1,7 @@
 .env
-.container-mode
+.env.*
+!.env.example
+.container-mode-*
 .container-version
 .claude/
 .DS_Store

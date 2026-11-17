@@ -1,8 +1,12 @@
+name: ai-container
+
 services:
   claude-cli:
     build: .
     image: ai-container:local
-    container_name: ai_container
+    # Change these (with COMPOSE_PROJECT_NAME and OLLAMA_HOST_PORT) to run a
+    # second instance alongside the first instead of replacing it.
+    container_name: "${CONTAINER_NAME:-ai_container}"
     ports:
       # The container always listens on 11434; the host side is mapped to 11435 so
       # it does not collide with an Ollama you already run natively on your Mac.

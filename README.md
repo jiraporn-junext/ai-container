@@ -151,6 +151,39 @@ make rebuild                  # build from scratch and start
 Every build path produces the same image, because the version is read from the `VERSION` file rather
 than passed in.
 
+## Running more than one instance
+
+The default instance is called `ai_container`, in the compose project `ai-container`, on host port
+`11435`. A second instance needs its own name, project and port, or it will replace the first one:
+
+```bash
+./container.sh start local --name ai2 --project ai2 --port 11436
+```
+
+Each project keeps its own settings, so the two do not interfere:
+
+| | instance 1 | instance 2 |
+| --- | --- | --- |
+| container | `ai_container` | `ai2` |
+| compose project | `ai-container` | `ai2` |
+| host port | 11435 | 11436 |
+| volumes | `ai-container_*` | `ai2_*` |
+| model | from `.env.ai-container` | from `.env.ai2` |
+
+The mode is remembered per project too, so one can run a local model while the other runs a cloud
+one. Pass the same flags to `stop`, `status`, `logs`, `shell` and `chat` to act on that instance.
+
+The per-instance settings can also be set in `.env` instead of on the command line:
+
+```
+CONTAINER_NAME=ai2
+COMPOSE_PROJECT_NAME=ai2
+OLLAMA_HOST_PORT=11436
+```
+
+Note that each project gets its **own** volumes, so a second instance downloads its own copy of the
+model. Share one by pointing both at the same volume in the compose file if you would rather not.
+
 ## Everyday commands
 
 | Command | What it does |

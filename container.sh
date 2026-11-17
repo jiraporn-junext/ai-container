@@ -5,6 +5,11 @@
 #   ./container.sh start local    # qwen3:1.7b, runs on this machine
 #   ./container.sh start cloud    # minimax-m3:cloud, runs on Ollama's GPUs
 #   ./container.sh stop
+#
+# Several instances can run side by side. Give each one its own name, compose
+# project and port:
+#
+#   ./container.sh start local --name ai2 --project ai2 --port 11436
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
@@ -15,10 +20,11 @@ LOCAL_MODEL="${LOCAL_MODEL:-qwen3:1.7b}"
 CLOUD_MODEL="${CLOUD_MODEL:-minimax-m3:cloud}"
 ENV_FILE=".env"
 EXAMPLE_FILE=".env.example"
-STATE_FILE=".container-mode"
-BUILT_FILE=".container-version"
 VERSION_FILE="VERSION"
 WAIT_SECONDS="${WAIT_SECONDS:-1800}"
+DEFAULT_NAME="ai_container"
+DEFAULT_PROJECT="ai-container"
+DEFAULT_PORT="11435"
 
 info() { printf '\033[36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!!\033[0m %s\n' "$*" >&2; }
@@ -26,7 +32,7 @@ fail() { printf '\033[31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-Usage: ./container.sh <command> [mode]
+Usage: ./container.sh <command> [mode] [options]
 
 Commands:
   start [local|cloud]   Build if needed, start the container, wait for the model
@@ -46,11 +52,73 @@ Modes:
   local   Runs the model on this machine. Default: qwen3:1.7b
   cloud   Runs the model on Ollama's GPUs. Default: minimax-m3:cloud
 
-The chosen mode is remembered, so plain "./container.sh start" reuses it.
+Options:
+  --name NAME       Container name. Default: ai_container
+  --project NAME    Compose project, which owns the volumes. Default: ai-container
+  --port PORT       Host port for the Ollama API. Default: 11435
+
+The chosen mode is remembered per project, so plain "./container.sh start"
+reuses it.
+
+To run a second instance next to the first, give it its own name, project and
+port - otherwise it replaces the first one:
+
+  ./container.sh start local --name ai2 --project ai2 --port 11436
 
 Override the models with the LOCAL_MODEL and CLOUD_MODEL environment variables.
 EOF
 }
+
+# ---------------------------------------------------------------- arguments
+
+positional=()
+name_override=""
+project_override=""
+port_override=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --name) name_override="${2:-}"; shift 2 || true ;;
+        --name=*) name_override="${1#*=}"; shift ;;
+        --project) project_override="${2:-}"; shift 2 || true ;;
+        --project=*) project_override="${1#*=}"; shift ;;
+        --port) port_override="${2:-}"; shift 2 || true ;;
+        --port=*) port_override="${1#*=}"; shift ;;
+        --) shift; positional+=("$@"); break ;;
+        *) positional+=("$1"); shift ;;
+    esac
+done
+
+command_name="${positional[0]:-help}"
+mode_arg="${positional[1]:-}"
+
+CONTAINER_NAME="${name_override:-${CONTAINER_NAME:-$DEFAULT_NAME}}"
+PROJECT="${project_override:-${COMPOSE_PROJECT_NAME:-$DEFAULT_PROJECT}}"
+if [ -n "$port_override" ]; then
+    export OLLAMA_HOST_PORT="$port_override"
+fi
+
+export CONTAINER_NAME
+
+# Per-project files, so two instances do not overwrite each other's settings
+MODE_FILE=".container-mode-${PROJECT}"
+BUILT_FILE=".container-version"
+MODEL_ENV_FILE=".env.${PROJECT}"
+
+# ------------------------------------------------------------------ compose
+
+# docker compose with the project name pinned, and the shared .env plus any
+# per-project overrides
+compose() {
+    local args=(-p "$PROJECT")
+    local file
+    for file in "$ENV_FILE" "$MODEL_ENV_FILE"; do
+        [ -f "$file" ] && args+=(--env-file "$file")
+    done
+    $COMPOSE "${args[@]}" "$@"
+}
+
+# ------------------------------------------------------------------ helpers
 
 ensure_env() {
     if [ ! -f "$ENV_FILE" ]; then
@@ -63,20 +131,19 @@ ensure_env() {
     fi
 }
 
-# Point .env at a model, leaving every other setting in the file alone
+# Point the env file at a model, leaving every other setting in it alone
 set_model() {
-    local model="$1"
-    if grep -qE '^[[:space:]]*OLLAMA_MODEL[[:space:]]*=' "$ENV_FILE"; then
-        # Keep the value on one line and keep the file's trailing newline intact
-        sed -i.bak -E "s|^[[:space:]]*OLLAMA_MODEL[[:space:]]*=.*$|OLLAMA_MODEL=${model}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    local model="$1" file="$MODEL_ENV_FILE"
+    if grep -qE '^[[:space:]]*OLLAMA_MODEL[[:space:]]*=' "$file" 2>/dev/null; then
+        sed -i.bak -E "s|^[[:space:]]*OLLAMA_MODEL[[:space:]]*=.*$|OLLAMA_MODEL=${model}|" "$file" && rm -f "$file.bak"
     else
-        printf '\nOLLAMA_MODEL=%s\n' "$model" >> "$ENV_FILE"
+        printf 'OLLAMA_MODEL=%s\n' "$model" >> "$file"
     fi
 }
 
 active_mode() {
-    if [ -f "$STATE_FILE" ]; then
-        cat "$STATE_FILE"
+    if [ -f "$MODE_FILE" ]; then
+        cat "$MODE_FILE"
     else
         echo local
     fi
@@ -110,7 +177,7 @@ wait_for_model() {
     local model="$1" waited=0
     info "waiting for $model to be ready"
     while [ "$waited" -lt "$WAIT_SECONDS" ]; do
-        if $COMPOSE exec -T "$SERVICE" \
+        if compose exec -T "$SERVICE" \
             sh -c "curl -sf http://127.0.0.1:11434/api/tags | grep -Fq '$model'" >/dev/null 2>&1; then
             info "$model is ready"
             return 0
@@ -133,7 +200,9 @@ print_banner() {
   mode     $mode
   model    $model
   version  $(current_version)
-  host     http://localhost:\${OLLAMA_HOST_PORT:-11435}
+  name     $CONTAINER_NAME
+  project  $PROJECT
+  host     http://localhost:${OLLAMA_HOST_PORT:-$DEFAULT_PORT}
 
   chat     ./container.sh chat
   code     ./container.sh shell   (then: aider --model ollama_chat/$model)
@@ -145,30 +214,30 @@ EOF
 # A container created outside this project but using the same name would stop
 # "compose up" with a confusing error, so say what to do about it.
 check_name_conflict() {
-    local name project existing
-    name="$(sed -n 's/^[[:space:]]*container_name:[[:space:]]*//p' docker-compose.yml | head -1)"
-    [ -n "$name" ] || return 0
+    local existing project
 
-    existing="$(docker ps -a --filter "name=^/${name}$" --format '{{.ID}}' 2>/dev/null | head -1)"
+    existing="$(docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format '{{.ID}}' 2>/dev/null | head -1)"
     [ -n "$existing" ] || return 0
 
     # Containers made by this project carry its label and are replaced normally
     project="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$existing" 2>/dev/null || echo "")"
-    if [ "$project" = "$(project_name)" ]; then
+    if [ "$project" = "$PROJECT" ]; then
         return 0
     fi
 
-    warn "a container named '$name' already exists and was not created by this project"
-    warn "it has to go before the new one can start:"
+    warn "a container named '$CONTAINER_NAME' already exists and belongs to project '$project'"
+    warn "use a different name to run alongside it:"
     warn ""
-    warn "    docker rm -f $name"
+    warn "    ./container.sh start --name ${CONTAINER_NAME}2 --project ${PROJECT}2 --port 11436"
+    warn ""
+    warn "or remove the old one first:"
+    warn ""
+    warn "    docker rm -f $CONTAINER_NAME"
     warn ""
     exit 1
 }
 
-project_name() {
-    basename "$PWD" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_.-]/-/g'
-}
+# ----------------------------------------------------------------- commands
 
 do_start() {
     local mode="${1:-$(active_mode)}"
@@ -180,14 +249,14 @@ do_start() {
 
     ensure_env
     set_model "$model"
-    echo "$mode" > "$STATE_FILE"
+    echo "$mode" > "$MODE_FILE"
 
     local want have
     want="$(current_version)"
     have="$(built_version)"
     if [ "$want" != "$have" ]; then
         info "building the image (version $want, first build takes a few minutes)"
-        $COMPOSE build
+        compose build
         echo "$want" > "$BUILT_FILE"
     else
         info "image is up to date (version $want)"
@@ -195,8 +264,8 @@ do_start() {
 
     check_name_conflict
 
-    info "starting the container in $mode mode"
-    $COMPOSE up -d --remove-orphans
+    info "starting '$CONTAINER_NAME' in $mode mode (project $PROJECT)"
+    compose up -d --remove-orphans
 
     if ! wait_for_model "$model"; then
         exit 1
@@ -211,49 +280,51 @@ do_status() {
     printf 'version %s\n' "$(current_version)"
     printf 'mode    %s\n' "$mode"
     printf 'model   %s\n' "$(model_for_mode "$mode")"
-    printf 'env     %s\n' "$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" 2>/dev/null || echo 'not set')"
+    printf 'name    %s\n' "$CONTAINER_NAME"
+    printf 'project %s\n' "$PROJECT"
+    printf 'env     %s\n' "$(grep -E '^OLLAMA_MODEL=' "$MODEL_ENV_FILE" 2>/dev/null || grep -E '^OLLAMA_MODEL=' "$ENV_FILE" 2>/dev/null || echo 'not set')"
     echo
-    $COMPOSE ps
+    compose ps
     echo
-    $COMPOSE exec -T "$SERVICE" ollama list 2>/dev/null || true
+    compose exec -T "$SERVICE" ollama list 2>/dev/null || true
 }
 
-case "${1:-help}" in
+case "$command_name" in
     start)
-        do_start "${2:-}"
+        do_start "$mode_arg"
         ;;
     stop)
-        info "stopping the container"
-        $COMPOSE down
+        info "stopping '$CONTAINER_NAME' (project $PROJECT)"
+        compose down
         ;;
     restart)
-        $COMPOSE down
-        do_start "${2:-}"
+        compose down
+        do_start "$mode_arg"
         ;;
     status)
         do_status
         ;;
     logs)
-        $COMPOSE exec "$SERVICE" tail -f /var/log/ollama.log /var/log/ollama-bootstrap.log
+        compose exec "$SERVICE" tail -f /var/log/ollama.log /var/log/ollama-bootstrap.log
         ;;
     shell)
-        $COMPOSE exec "$SERVICE" bash
+        compose exec "$SERVICE" bash
         ;;
     models)
-        $COMPOSE exec "$SERVICE" ollama list
+        compose exec "$SERVICE" ollama list
         ;;
     chat)
-        $COMPOSE exec "$SERVICE" ollama run "$(model_for_mode "$(active_mode)")"
+        compose exec "$SERVICE" ollama run "$(model_for_mode "$(active_mode)")"
         ;;
     signin)
         info "signing in to Ollama - a browser window opens, or paste a code"
         # A one-shot container: it starts Ollama, signs in, and stops again, so
         # nothing is left running. The container itself does not need to be up.
-        $COMPOSE run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signin
+        compose run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signin
         ;;
     signout)
         info "signing out of Ollama"
-        $COMPOSE run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signout
+        compose run --rm --no-deps --entrypoint /usr/local/bin/ollama-signin "$SERVICE" signout
         ;;
     version)
         echo "$(current_version)"
