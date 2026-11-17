@@ -154,7 +154,21 @@ than passed in.
 ## Running more than one instance
 
 The default instance is called `ai_container`, in the compose project `ai-container`, on host port
-`11435`. A second instance needs its own project and port, or it will replace the first one:
+`11435`. A second instance needs its own project and port, or it will replace the first one — name
+it and the script takes care of the rest:
+
+```bash
+./container.sh start ai2
+```
+
+That gives you a container called `ai2` in a project called `ai2`, on the next free port starting at
+11436. Add a mode for a cloud model:
+
+```bash
+./container.sh start cloud ai2
+```
+
+The flags still work if you want to be explicit:
 
 ```bash
 ./container.sh start local --project ai2 --port 11436
@@ -175,7 +189,8 @@ Each project keeps its own settings, so the two do not interfere:
 | model | from `.env.ai-container` | from `.env.ai2` |
 
 The mode is remembered per project too, so one can run a local model while the other runs a cloud
-one. Pass the same flags to `stop`, `status`, `logs`, `shell` and `chat` to act on that instance.
+one. Name the instance with any command to act on it: `./container.sh stop ai2`,
+`./container.sh shell ai2`, `./container.sh chat ai2`.
 
 The per-instance settings can also be set in `.env` instead of on the command line:
 

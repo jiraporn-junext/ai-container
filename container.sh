@@ -32,7 +32,7 @@ fail() { printf '\033[31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'EOF'
-Usage: ./container.sh <command> [mode] [options]
+Usage: ./container.sh <command> [mode|instance] [instance] [options]
 
 Commands:
   start [local|cloud]   Build if needed, start the container, wait for the model
@@ -52,6 +52,12 @@ Modes:
   local   Runs the model on this machine. Default: qwen3:1.7b
   cloud   Runs the model on Ollama's GPUs. Default: minimax-m3:cloud
 
+An instance is a separate container with its own name, project and volumes.
+Name it instead of a mode to run it:
+
+  ./container.sh start ai2          # instance "ai2"
+  ./container.sh start cloud ai2    # instance "ai2" in cloud mode
+
 Options:
   --name NAME       Container name. Default: ai_container
   --project NAME    Compose project, which owns the volumes. Default: ai-container
@@ -62,11 +68,6 @@ Give either the name or the project and the other follows from it, so
 
 The chosen mode is remembered per project, so plain "./container.sh start"
 reuses it.
-
-To run a second instance next to the first, give it its own project and port
-- otherwise it replaces the first one:
-
-  ./container.sh start local --project ai2 --port 11436
 
 Override the models with the LOCAL_MODEL and CLOUD_MODEL environment variables.
 EOF
@@ -93,7 +94,21 @@ while [ $# -gt 0 ]; do
 done
 
 command_name="${positional[0]:-help}"
-mode_arg="${positional[1]:-}"
+
+# The second argument is the mode, or the name of an instance to run.
+# "start ai2" runs the instance ai2, "start cloud ai2" runs it in cloud mode.
+first="${positional[1]:-}"
+second="${positional[2]:-}"
+mode_arg=""
+instance_arg=""
+if [ -n "$first" ] && [ "$first" != "local" ] && [ "$first" != "cloud" ]; then
+    instance_arg="$first"
+elif [ -n "$second" ]; then
+    mode_arg="$first"
+    instance_arg="$second"
+else
+    mode_arg="$first"
+fi
 
 # ------------------------------------------------------------------ compose
 
@@ -125,6 +140,19 @@ ensure_env() {
 # underscores
 sanitize_project() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g; s/^[^a-z0-9]*//'
+}
+
+# The first port at or above the given one that nothing is listening on
+free_port() {
+    local port="$1"
+    while [ "$port" -lt 11500 ]; do
+        if ! (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+            echo "$port"
+            return 0
+        fi
+        port=$((port + 1))
+    done
+    echo "$1"
 }
 
 # The default project keeps its original container name, so the first instance
@@ -266,6 +294,10 @@ check_name_conflict() {
 name_given="${name_override:-${CONTAINER_NAME:-}}"
 project_given="${project_override:-${COMPOSE_PROJECT_NAME:-}}"
 
+if [ -n "$instance_arg" ] && [ -z "$project_given" ] && [ -z "$name_given" ]; then
+    project_given="$(sanitize_project "$instance_arg")"
+fi
+
 if [ -n "$name_given" ] && [ -z "$project_given" ]; then
     project_given="$(sanitize_project "$name_given")"
 fi
@@ -278,6 +310,9 @@ PROJECT="${project_given:-$DEFAULT_PROJECT}"
 
 if [ -n "$port_override" ]; then
     export OLLAMA_HOST_PORT="$port_override"
+elif [ -n "$instance_arg" ] && [ -z "${OLLAMA_HOST_PORT:-}" ]; then
+    # A second instance needs its own port, so take the next free one
+    export OLLAMA_HOST_PORT="$(free_port 11436)"
 fi
 
 export CONTAINER_NAME
