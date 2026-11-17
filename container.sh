@@ -40,6 +40,7 @@ Commands:
   stop                  Stop and remove the container (volumes are kept)
   restart [local|cloud] Restart, optionally switching between local and cloud
   status                Show container state and the active model
+  instances             List every instance and its cpu and memory use
   logs                  Follow the Ollama server and model-pull logs
   shell                 Open a bash shell inside the container
   models                List the models stored in the container
@@ -427,6 +428,17 @@ case "$command_name" in
         ;;
     status)
         do_status
+        ;;
+    instances)
+        # Every container this project has created, running or not
+        info "instances"
+        docker ps -a \
+            --filter "label=com.docker.compose.service=$SERVICE" \
+            --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || true
+        echo
+        info "cpu and memory"
+        docker stats --no-stream \
+            --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' 2>/dev/null || true
         ;;
     logs)
         compose exec "$SERVICE" tail -f /var/log/ollama.log /var/log/ollama-bootstrap.log

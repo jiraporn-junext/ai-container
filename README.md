@@ -260,6 +260,7 @@ that means Ollama truncates rather than the model failing.
 | `./container.sh stop` | Stop and remove the container (volumes are kept) |
 | `./container.sh restart [local\|cloud]` | Restart, optionally switching mode |
 | `./container.sh status` | Container state and the active model |
+| `./container.sh instances` | Every instance and its cpu and memory use |
 | `./container.sh chat` | Chat with the active model |
 | `./container.sh shell` | Open a shell inside the container |
 | `./container.sh models` | List the models in the container |
