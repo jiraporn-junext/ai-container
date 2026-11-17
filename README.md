@@ -300,6 +300,36 @@ docker compose run --rm \
   claude-cli
 ```
 
+## Memory
+
+The container has **no memory cap by default** — it can use everything the Docker Desktop VM has
+been given. To check what it is actually using:
+
+```bash
+docker stats ai_container
+docker inspect -f '{{.HostConfig.Memory}}' ai_container   # 0 means no limit
+```
+
+**To give it more**, the limit that matters is Docker Desktop's own: **Settings → Resources →
+Memory**, then Apply & Restart. The container draws from that pool, so raising it is what actually
+makes more memory available.
+
+To put a ceiling on this container so it cannot starve the rest of your Mac, set a limit in `.env`:
+
+```
+MEM_LIMIT=8g
+```
+
+Then `./container.sh start` to apply it. `0` means no limit.
+
+Two Ollama settings also move the needle:
+
+| Setting | Effect |
+| --- | --- |
+| `OLLAMA_CONTEXT_LENGTH` | Bigger context means a bigger KV cache, so more RAM per model. 16384 is comfortable; 32768 roughly doubles the cache. |
+| `OLLAMA_KEEP_ALIVE` | How long a model stays loaded after use (`5m` by default). A longer keep-alive means less reloading, at the cost of holding memory. |
+| `OLLAMA_MAX_LOADED_MODELS` | How many models stay resident at once. Keep it at 1 on a small machine. |
+
 ## Performance
 
 A Linux container on macOS cannot use the Mac's Metal GPU, so Ollama runs on the CPU only.
