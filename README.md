@@ -225,6 +225,32 @@ OLLAMA_HOST_PORT=11436
 Note that each project gets its **own** volumes, so a second instance downloads its own copy of the
 model. Share one by pointing both at the same volume in the compose file if you would rather not.
 
+## The "isn't recognized" warning
+
+Claude Code only knows Anthropic's own model names. When it sees `qwen3:1.7b` it prints:
+
+```
+⚠ Model "qwen3:1.7b" isn't recognized · context assumed to be 1m tokens
+```
+
+That is a **warning, not an error** — the session works. But Claude Code does not know how big the
+model's context really is, so it assumes one. Left alone it assumes 1M tokens (200K with
+`CLAUDE_CODE_DISABLE_1M_CONTEXT=1`), while Ollama gives the model `OLLAMA_CONTEXT_LENGTH` — 16384 by
+default. Claude Code then lets the conversation grow far past the real limit, and the request comes
+back rejected instead of being compacted first.
+
+The container sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to the same value as `OLLAMA_CONTEXT_LENGTH`, so
+Claude Code compacts at the boundary the model actually has, and the warning goes away.
+
+If you raise `OLLAMA_CONTEXT_LENGTH`, both move together:
+
+```
+OLLAMA_CONTEXT_LENGTH=32768
+```
+
+The model itself has to support it — `qwen3:1.7b` handles 40960 tokens natively, and going past
+that means Ollama truncates rather than the model failing.
+
 ## Everyday commands
 
 | Command | What it does |

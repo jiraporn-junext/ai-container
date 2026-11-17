@@ -43,6 +43,12 @@ services:
       # model name as "qwen3:1.7b[1m]", which Ollama rejects with a 400.
       CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
 
+      # Claude Code does not recognise local model names, so it warns that the
+      # model "isn't recognized" and assumes a context window of its own. Tell
+      # it the window Ollama actually gives the model, otherwise it lets the
+      # conversation grow past the real limit and the request gets rejected.
+      CLAUDE_CODE_MAX_CONTEXT_TOKENS: "${OLLAMA_CONTEXT_LENGTH:-16384}"
+
       # Git identity for commits made inside the container. The host's
       # ~/.gitconfig is deliberately not mounted, so the container has its own.
       GIT_AUTHOR_NAME: "${GIT_USER_NAME:-ai-container}"
