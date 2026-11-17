@@ -57,13 +57,16 @@ Options:
   --project NAME    Compose project, which owns the volumes. Default: ai-container
   --port PORT       Host port for the Ollama API. Default: 11435
 
+Give either the name or the project and the other follows from it, so
+"--project ai2" is named ai2, and "--name work" runs in the project "work".
+
 The chosen mode is remembered per project, so plain "./container.sh start"
 reuses it.
 
-To run a second instance next to the first, give it its own name, project and
-port - otherwise it replaces the first one:
+To run a second instance next to the first, give it its own project and port
+- otherwise it replaces the first one:
 
-  ./container.sh start local --name ai2 --project ai2 --port 11436
+  ./container.sh start local --project ai2 --port 11436
 
 Override the models with the LOCAL_MODEL and CLOUD_MODEL environment variables.
 EOF
@@ -92,19 +95,6 @@ done
 command_name="${positional[0]:-help}"
 mode_arg="${positional[1]:-}"
 
-CONTAINER_NAME="${name_override:-${CONTAINER_NAME:-$DEFAULT_NAME}}"
-PROJECT="${project_override:-${COMPOSE_PROJECT_NAME:-$DEFAULT_PROJECT}}"
-if [ -n "$port_override" ]; then
-    export OLLAMA_HOST_PORT="$port_override"
-fi
-
-export CONTAINER_NAME
-
-# Per-project files, so two instances do not overwrite each other's settings
-MODE_FILE=".container-mode-${PROJECT}"
-BUILT_FILE=".container-version"
-MODEL_ENV_FILE=".env.${PROJECT}"
-
 # ------------------------------------------------------------------ compose
 
 # docker compose with the project name pinned, and the shared .env plus any
@@ -129,6 +119,38 @@ ensure_env() {
             touch "$ENV_FILE"
         fi
     fi
+}
+
+# Project names are lowercase and may only contain letters, digits, dashes and
+# underscores
+sanitize_project() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g; s/^[^a-z0-9]*//'
+}
+
+# The default project keeps its original container name, so the first instance
+# is not renamed out from under it
+name_from_project() {
+    if [ "$1" = "$DEFAULT_PROJECT" ]; then
+        echo "$DEFAULT_NAME"
+    else
+        echo "$1"
+    fi
+}
+
+# Record the instance specific settings next to the model, so plain compose
+# commands see the same values the script used
+set_instance_settings() {
+    local file="$MODEL_ENV_FILE"
+    local key value
+    for entry in "CONTAINER_NAME=$CONTAINER_NAME" "OLLAMA_HOST_PORT=${OLLAMA_HOST_PORT:-$DEFAULT_PORT}"; do
+        key="${entry%%=*}"
+        value="${entry#*=}"
+        if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$file" 2>/dev/null; then
+            sed -i.bak -E "s|^[[:space:]]*${key}[[:space:]]*=.*$|${key}=${value}|" "$file" && rm -f "$file.bak"
+        else
+            printf '%s=%s\n' "$key" "$value" >> "$file"
+        fi
+    done
 }
 
 # Point the env file at a model, leaving every other setting in it alone
@@ -237,6 +259,34 @@ check_name_conflict() {
     exit 1
 }
 
+# ------------------------------------------------------------- resolution
+
+# Whichever of the two you give, the other follows from it. Give a project and
+# the container is named after it; give a name and the project follows from it.
+name_given="${name_override:-${CONTAINER_NAME:-}}"
+project_given="${project_override:-${COMPOSE_PROJECT_NAME:-}}"
+
+if [ -n "$name_given" ] && [ -z "$project_given" ]; then
+    project_given="$(sanitize_project "$name_given")"
+fi
+if [ -n "$project_given" ] && [ -z "$name_given" ]; then
+    name_given="$(name_from_project "$project_given")"
+fi
+
+CONTAINER_NAME="${name_given:-$DEFAULT_NAME}"
+PROJECT="${project_given:-$DEFAULT_PROJECT}"
+
+if [ -n "$port_override" ]; then
+    export OLLAMA_HOST_PORT="$port_override"
+fi
+
+export CONTAINER_NAME
+
+# Per-project files, so two instances do not overwrite each other's settings
+MODE_FILE=".container-mode-${PROJECT}"
+BUILT_FILE=".container-version"
+MODEL_ENV_FILE=".env.${PROJECT}"
+
 # ----------------------------------------------------------------- commands
 
 do_start() {
@@ -249,6 +299,7 @@ do_start() {
 
     ensure_env
     set_model "$model"
+    set_instance_settings
     echo "$mode" > "$MODE_FILE"
 
     local want have

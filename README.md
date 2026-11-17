@@ -154,11 +154,15 @@ than passed in.
 ## Running more than one instance
 
 The default instance is called `ai_container`, in the compose project `ai-container`, on host port
-`11435`. A second instance needs its own name, project and port, or it will replace the first one:
+`11435`. A second instance needs its own project and port, or it will replace the first one:
 
 ```bash
-./container.sh start local --name ai2 --project ai2 --port 11436
+./container.sh start local --project ai2 --port 11436
 ```
+
+Give either the name or the project and the other follows from it, so `--project ai2` produces a
+container called `ai2`, and `--name work` runs in a project called `work`. Give both and both are
+used as given.
 
 Each project keeps its own settings, so the two do not interfere:
 
@@ -176,7 +180,6 @@ one. Pass the same flags to `stop`, `status`, `logs`, `shell` and `chat` to act 
 The per-instance settings can also be set in `.env` instead of on the command line:
 
 ```
-CONTAINER_NAME=ai2
 COMPOSE_PROJECT_NAME=ai2
 OLLAMA_HOST_PORT=11436
 ```
