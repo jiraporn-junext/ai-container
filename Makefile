@@ -31,7 +31,7 @@ shell: ## Open a bash shell inside the container
 	$(COMPOSE) exec $(SERVICE) bash
 
 claude: ## Start Claude Code, wired to the local model
-	$(COMPOSE) exec $(SERVICE) claude
+	./container.sh claude
 
 models: ## List the models stored in the container
 	$(COMPOSE) exec $(SERVICE) ollama list

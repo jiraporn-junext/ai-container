@@ -16,6 +16,7 @@ The container ships with:
 ./container.sh start local     # model runs on this machine
 ./container.sh start cloud     # model runs on Ollama's GPUs
 ./container.sh chat            # talk to it
+./container.sh claude          # Claude Code, wired to the model
 ```
 
 The first start downloads the model into the `ollama-models` volume. Later starts reuse it.
@@ -229,6 +230,7 @@ model. Share one by pointing both at the same volume in the compose file if you 
 | Command | What it does |
 | --- | --- |
 | `./container.sh start [local\|cloud]` | Build if needed, start, and wait for the model |
+| `./container.sh claude` | Start Claude Code inside the container, wired to the local model |
 | `./container.sh stop` | Stop and remove the container (volumes are kept) |
 | `./container.sh restart [local\|cloud]` | Restart, optionally switching mode |
 | `./container.sh status` | Container state and the active model |
@@ -238,6 +240,13 @@ model. Share one by pointing both at the same volume in the compose file if you 
 | `./container.sh logs` | Follow the Ollama server and pull logs |
 | `./container.sh signin` | Sign in to Ollama (needed for some cloud models) |
 | `./container.sh help` | Show usage |
+
+Anything after the instance name goes straight to Claude Code:
+
+```bash
+./container.sh claude --resume
+./container.sh claude ai2 --model qwen3:1.7b
+```
 
 `make up`, `make down`, `make shell`, `make chat` and the rest are still available and wrap the same
 thing, so `docker compose exec claude-cli bash` works just as well if you prefer neither.

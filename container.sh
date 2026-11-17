@@ -44,6 +44,7 @@ Commands:
   shell                 Open a bash shell inside the container
   models                List the models stored in the container
   chat                  Chat with the active model
+  claude                Start Claude Code, wired to the local model
   signin                Sign in to Ollama (needed for some cloud models)
   signout               Sign out of Ollama
   version               Print the version of this repo
@@ -108,7 +109,12 @@ first="${positional[1]:-}"
 second="${positional[2]:-}"
 if [ "$command_name" = "build" ]; then
     version_arg="$first"
-elif [ -n "$first" ] && [ "$first" != "local" ] && [ "$first" != "cloud" ]; then
+elif [ "$command_name" = "claude" ]; then
+    # "claude ai2 --resume": the instance, then anything for Claude Code
+    if [ -n "$first" ] && [ "${first#-}" = "$first" ]; then
+        instance_arg="$first"
+    fi
+elif [ -n "$first" ] && [ "${first#-}" = "$first" ] && [ "$first" != "local" ] && [ "$first" != "cloud" ]; then
     # "start ai2" runs the instance ai2
     instance_arg="$first"
 elif [ -n "$second" ]; then
@@ -433,6 +439,20 @@ case "$command_name" in
         ;;
     chat)
         compose exec "$SERVICE" ollama run "$(model_for_mode "$(active_mode)")"
+        ;;
+    claude)
+        # Anything after the instance name is passed straight to Claude Code
+        claude_args=()
+        start_at=1
+        [ -n "$instance_arg" ] && start_at=2
+        for ((i = start_at; i < ${#positional[@]}; i++)); do
+            claude_args+=("${positional[$i]}")
+        done
+        if [ ${#claude_args[@]} -gt 0 ]; then
+            compose exec "$SERVICE" claude "${claude_args[@]}"
+        else
+            compose exec "$SERVICE" claude
+        fi
         ;;
     signin)
         info "signing in to Ollama - a browser window opens, or paste a code"
