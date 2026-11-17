@@ -51,6 +51,13 @@ RUN echo 'export NVM_DIR="$HOME/.nvm"' >> /root/.bashrc \
 COPY scripts/ollama-bootstrap.sh /usr/local/bin/ollama-bootstrap
 RUN chmod +x /usr/local/bin/ollama-bootstrap
 
+# Version of the image, reported by "ai-container --version" inside the container
+ARG VERSION=dev
+ENV AI_CONTAINER_VERSION=${VERSION}
+COPY VERSION /etc/ai-container/VERSION
+COPY scripts/ai-container /usr/local/bin/ai-container
+RUN chmod +x /usr/local/bin/ai-container
+
 # Configure Supervisor to keep the Ollama server running automatically in the background
 RUN mkdir -p /var/log/supervisor
 RUN printf '%s\n' \

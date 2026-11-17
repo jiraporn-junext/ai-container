@@ -48,6 +48,28 @@ The mode is remembered in `.container-mode`, and the model is written into `.env
 LOCAL_MODEL=qwen3:4b CLOUD_MODEL=gpt-oss:120b-cloud ./container.sh start cloud
 ```
 
+## Versioning
+
+The version lives in the `VERSION` file at the repo root, in semver form, and is the single source of
+truth. It is baked into the image, so the container can report which release it is:
+
+```bash
+./container.sh version                        # 2.0.0
+docker compose exec claude-cli ai-container --version
+docker compose exec claude-cli ai-container    # version, endpoints, active model
+```
+
+To cut a release:
+
+```bash
+echo 2.1.0 > VERSION
+git add VERSION && git commit -m "..." && git tag -a 2.1.0 -m "..."
+```
+
+The next `./container.sh start` notices the version changed and rebuilds the image with it. Releases
+are tagged in semver form — `1.0.0` is the original container, `2.0.0` added the local and cloud
+model support.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -268,6 +290,8 @@ Dockerfile                   image: Ollama + Claude Code + Node 24
 docker-compose.yml           service wiring, volumes, Claude Code -> Ollama
 container.sh                 start/stop the container, switch between local and cloud models
 scripts/ollama-bootstrap.sh  pulls the model on first start
+scripts/ai-container         reports the version and endpoints inside the container
 Makefile                     convenience wrappers around docker compose
+VERSION                      the current version, in semver form
 .env.example                 configuration template
 ```

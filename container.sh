@@ -16,6 +16,8 @@ CLOUD_MODEL="${CLOUD_MODEL:-minimax-m3:cloud}"
 ENV_FILE=".env"
 EXAMPLE_FILE=".env.example"
 STATE_FILE=".container-mode"
+BUILT_FILE=".container-version"
+VERSION_FILE="VERSION"
 WAIT_SECONDS="${WAIT_SECONDS:-1800}"
 
 info() { printf '\033[36m==>\033[0m %s\n' "$*"; }
@@ -36,6 +38,7 @@ Commands:
   models                List the models stored in the container
   chat                  Chat with the active model
   signin                Sign in to Ollama (needed for some cloud models)
+  version               Print the version of this repo
   help                  Show this help
 
 Modes:
@@ -78,6 +81,22 @@ active_mode() {
     fi
 }
 
+current_version() {
+    if [ -f "$VERSION_FILE" ]; then
+        tr -d ' \t\n\r' < "$VERSION_FILE"
+    else
+        echo "unknown"
+    fi
+}
+
+built_version() {
+    if [ -f "$BUILT_FILE" ]; then
+        cat "$BUILT_FILE"
+    else
+        echo "none"
+    fi
+}
+
 model_for_mode() {
     case "$1" in
         local) echo "$LOCAL_MODEL" ;;
@@ -110,13 +129,14 @@ print_banner() {
     local mode="$1" model="$2"
     cat <<EOF
 
-  mode    $mode
-  model   $model
-  host    http://localhost:\${OLLAMA_HOST_PORT:-11435}
+  mode     $mode
+  model    $model
+  version  $(current_version)
+  host     http://localhost:\${OLLAMA_HOST_PORT:-11435}
 
-  chat    ./container.sh chat
-  code    ./container.sh shell   (then: aider --model ollama_chat/$model)
-  logs    ./container.sh logs
+  chat     ./container.sh chat
+  code     ./container.sh shell   (then: aider --model ollama_chat/$model)
+  logs     ./container.sh logs
 
 EOF
 }
@@ -133,9 +153,15 @@ do_start() {
     set_model "$model"
     echo "$mode" > "$STATE_FILE"
 
-    if ! $COMPOSE images -q "$SERVICE" 2>/dev/null | grep -q .; then
-        info "building the image (first run takes a few minutes)"
-        $COMPOSE build
+    local want have
+    want="$(current_version)"
+    have="$(built_version)"
+    if [ "$want" != "$have" ]; then
+        info "building the image (version $want, first build takes a few minutes)"
+        $COMPOSE build --build-arg "VERSION=$want"
+        echo "$want" > "$BUILT_FILE"
+    else
+        info "image is up to date (version $want)"
     fi
 
     info "starting the container in $mode mode"
@@ -151,6 +177,7 @@ do_start() {
 do_status() {
     local mode
     mode="$(active_mode)"
+    printf 'version %s\n' "$(current_version)"
     printf 'mode    %s\n' "$mode"
     printf 'model   %s\n' "$(model_for_mode "$mode")"
     printf 'env     %s\n' "$(grep -E '^OLLAMA_MODEL=' "$ENV_FILE" 2>/dev/null || echo 'not set')"
@@ -190,6 +217,9 @@ case "${1:-help}" in
     signin)
         info "signing in to Ollama - a browser window opens, or paste a code"
         $COMPOSE exec "$SERVICE" ollama signin
+        ;;
+    version)
+        echo "$(current_version)"
         ;;
     help | -h | --help)
         usage

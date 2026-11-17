@@ -1,13 +1,14 @@
 SHELL := /bin/bash
 COMPOSE ?= docker compose
 SERVICE ?= claude-cli
+VERSION := $(shell cat VERSION 2>/dev/null || echo dev)
 
 MODEL ?= $(strip $(shell grep -E '^OLLAMA_MODEL=' .env 2>/dev/null | tail -n1 | cut -d= -f2-))
 ifeq ($(strip $(MODEL)),)
 MODEL := qwen3:1.7b
 endif
 
-.PHONY: help up down rebuild shell claude models pull chat logs ps wait-model
+.PHONY: help up down rebuild shell claude models pull chat logs ps wait-model version
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -20,8 +21,11 @@ down: ## Stop the container
 	./container.sh stop
 
 rebuild: ## Rebuild the image from scratch and restart
-	$(COMPOSE) build --no-cache
+	$(COMPOSE) build --no-cache --build-arg VERSION=$(VERSION)
 	./container.sh start
+
+version: ## Print the version
+	@echo $(VERSION)
 
 shell: ## Open a bash shell inside the container
 	$(COMPOSE) exec $(SERVICE) bash
