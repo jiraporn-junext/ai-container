@@ -70,6 +70,37 @@ The next `./container.sh start` notices the version changed and rebuilds the ima
 are tagged in semver form — `1.0.0` is the original container, `2.0.0` added the local and cloud
 model support.
 
+## What lands on your host
+
+| Where | What | Notes |
+| --- | --- | --- |
+| `${WORKSPACE_PATH}` → `/home/workspace` | your project folder | The only real bind mount. Anything the container writes there — files Claude Code edits, build output, git operations — is written straight to your Mac. |
+| `~/.gitconfig` → `/root/.gitconfig` | your git identity | Read-only (`ro`), so nothing is written back. |
+| `ai-container_ollama-models` | model weights | ~1.4 GB for the local model, nothing for a cloud model. |
+| `ai-container_claude-config` | Claude Code settings, tokens, history | |
+| `ai-container_nvm-data` | installed Node versions | |
+| `ai-container:local` | the image itself | ~1.5 GB plus Docker's build cache. |
+| repo folder | `.env`, `.container-mode`, `.container-version` | Small, gitignored, written by `container.sh`. |
+
+The three named volumes live in Docker's own storage, not in your project folder. On macOS that is
+inside Docker Desktop's data directory:
+
+```bash
+docker volume inspect ai-container_ollama-models   # where it actually is
+docker system df                                   # how much space Docker is using
+```
+
+Nothing else is written to your Mac. The container's port is bound to `127.0.0.1` on purpose —
+Ollama's API has no authentication, so leaving it on all interfaces would let anyone on your network
+use your model, and in cloud mode spend your Ollama account's quota.
+
+To remove everything the container created:
+
+```bash
+./container.sh stop                                # keeps the volumes
+docker compose down -v                             # also deletes the models and Claude config
+```
+
 ## Everyday commands
 
 | Command | What it does |

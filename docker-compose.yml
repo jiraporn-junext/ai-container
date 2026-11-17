@@ -6,7 +6,9 @@ services:
     ports:
       # The container always listens on 11434; the host side is mapped to 11435 so
       # it does not collide with an Ollama you already run natively on your Mac.
-      - "${OLLAMA_HOST_PORT:-11435}:11434"
+      # Bound to 127.0.0.1 on purpose: Ollama's API has no authentication, and a
+      # cloud model would spend your Ollama account's quota.
+      - "127.0.0.1:${OLLAMA_HOST_PORT:-11435}:11434"
     environment:
       # Model that gets pulled on first start and that Claude Code talks to
       OLLAMA_MODEL: "${OLLAMA_MODEL:-qwen3:1.7b}"
